@@ -146,7 +146,7 @@ function castAllRays() {
 
     rays.push(ray);
     rayAngle += FOV_ANGLE / NUM_RAYS; //각 ray 사이의 거리만큼 더하면서 ray를 왼쪽에서 오른쪽으로 투사한다. 
-    columnId++;
+    columnId++; // ??
   }
 }
 
