@@ -1,6 +1,6 @@
-const TILE_SIZE = 32; //맵에 그려지는 벽(cube)의 가로,세로,길이 
-const MAP_NUM_ROWS = 11;  //맵 11행
-const MAP_NUM_COLS = 15;  //맵 15열
+const TILE_SIZE = 32; //맵에 그려지는 벽(cube)의 가로,세로,길이
+const MAP_NUM_ROWS = 11; //맵 11행
+const MAP_NUM_COLS = 15; //맵 15열
 const WINDOW_WIDTH = MAP_NUM_COLS * 32;
 const WINDOW_HEIGHT = MAP_NUM_ROWS * 32;
 
@@ -81,19 +81,77 @@ class Player {
     noStroke();
     fill("red");
     circle(this.x, this.y, this.radius);
-    stroke("red");
+    /*stroke("red");
     line(
       this.x,
       this.y,
       this.x + Math.cos(this.rotationAngle) * 30,
       this.y + Math.sin(this.rotationAngle) * 30
-    );
+    );*/
   }
 }
 
 class Ray {
   constructor(rayAngle) {
-    this.rayAngle = rayAngle;
+    this.rayAngle = normalizeAngle(rayAngle);
+    this.wallHitX = 0;
+    this.wallHitY = 0;
+    this.distance = 0;
+
+    this.isRayFacingDown = this.rayAngle > 0 && this.rayAngle < Math.PI;  //아래를 바라보고있으면 라디안 값의 범위가 이렇다.
+    this.isRayFacingUp = !this.isRayFacingDown;
+
+    this.isRayFacingRight =
+      this.rayAngle < 0.5 * Math.PI || this.rayAngle > 1.5 * Math.PI;
+    this.isRayFacingLeft = !this.isRayFacingRight;
+  }
+  cast(columnId) {
+    var xintercept, yintercept;
+    var xstep, ystep;
+
+    /* HORIZONTAL INTERCECT */
+    var foundHorzWallHit = false;
+    var wallHitX = 0;
+    var wallHitY = 0;
+
+    yintercept = Math.floor(player.y / TILE_SIZE) * TILE_SIZE; //가장 가까운 y축 접점을 찾는 방법
+    yintercept += this.isRayFacingDown ? TILE_SIZE : 0; //아래를 보고 있으면 바로 위에서 TILE_SIZE만큼 더해야 상하 반전돼서 아래 접정이 된다.
+    xintercept = player.x + (yintercept - player.y) / Math.tan(this.rayAngle); //그 접점의 x좌표를 위에서 구한 y좌표를 활용해 삼각비로 구함
+
+    ystep = TILE_SIZE;
+    ystep *= this.isRayFacingUp ? -1 : 1; //ray가 위를 향해 있으면 ystep이 점점 줄어야 하므로 음수로 한다. 
+
+    xstep = TILE_SIZE / Math.tan(this.rayAngle);
+    xstep *= this.isRayFacingLeft && xstep > 0 ? -1 : 1;  //왼쪽으로 향하면 음수로 해준다. 양수일 때만
+    xstep *= this.isRayFacingRight && xstep < 0 ? -1 : 1; //오른쪽으로 향하면 양수로 바꿔준다. 음수이면.
+
+    var nextHorzTouchX = xintercept;
+    var nextHorzTouchY = yintercept;
+
+    if (this.isRayFacingUp) {
+      nextHorzTouchY--;
+    } //위를 향하고 있으면 그 경계가 yintercept가 되므로 --를 해줘서 한 픽셀 위로 올라가게 한다. 그러면 wall이다.
+
+    while (
+      nextHorzTouchX >= 0 &&
+      nextHorzTouchX <= WINDOW_WIDTH &&
+      nextHorzTouchY >= 0 &&
+      nextHorzTouchY <= WINDOW_HEIGHT
+    ) {
+      if (grid.hasWallAt(nextHorzTouchX, nextHorzTouchY)) {
+        foundHorzWallHit = true;
+        wallHitX = nextHorzTouchX;
+        wallHitY = nextHorzTouchY;  //HORIZONTAL로 검사했을 때 벽과 닿는 지점의 x좌표와 y좌표
+
+        stroke("red");
+        line(player.x, player.y, wallHitX, wallHitY);
+
+        break;
+      } else {
+        nextHorzTouchX += xstep;
+        nextHorzTouchY += ystep;
+      } //벽에 닿을 때까지 계속 step을 늘려주면서 찾는다. 
+    }
   }
   render() {
     stroke("rgba(255,0,0,0.3)");
@@ -101,7 +159,7 @@ class Ray {
     line(
       player.x,
       player.y,
-      player.x + Math.cos(this.rayAngle) * 30,  //ray가 30픽셀만큼만 간다고 가정하고 그린 것. 
+      player.x + Math.cos(this.rayAngle) * 30, //ray가 30픽셀만큼만 간다고 가정하고 그린 것.
       player.y + Math.sin(this.rayAngle) * 30
     );
   }
@@ -141,13 +199,24 @@ function castAllRays() {
   var rayAngle = player.rotationAngle - FOV_ANGLE / 2; //ray를 투사할 가장 왼 쪽부터 시작하기 위해 선언.
   rays = [];
 
-  for (var i = 0; i < NUM_RAYS; i++) {
+  // for (var i = 0; i < NUM_RAYS; i++) {
+  for (var i = 0; i < 1; i++) {
     var ray = new Ray(rayAngle);
+    ray.cast(columnId);
 
     rays.push(ray);
-    rayAngle += FOV_ANGLE / NUM_RAYS; //각 ray 사이의 거리만큼 더하면서 ray를 왼쪽에서 오른쪽으로 투사한다. 
-    columnId++; // ??
+    rayAngle += FOV_ANGLE / NUM_RAYS; //각 ray 사이의 거리만큼 더하면서 ray를 왼쪽에서 오른쪽으로 투사한다.
+    columnId++;
   }
+}
+
+//angle이 360도 즉 0부터 2파이 범위 안에 있도록 하는 함수 
+function normalizeAngle(angle) {
+  angle = angle % (2 * Math.PI);
+  if (angle < 0) {
+    angle = 2 * Math.PI + angle;
+  }
+  return angle;
 }
 
 function setup() {
@@ -156,7 +225,6 @@ function setup() {
 
 function update() {
   player.update();
-  castAllRays();
 }
 
 function draw() {
@@ -167,4 +235,5 @@ function draw() {
     ray.render();
   }
   player.render();
+  castAllRays();
 }
