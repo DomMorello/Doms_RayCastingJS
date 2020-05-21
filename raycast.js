@@ -8,13 +8,15 @@ const FOV_ANGLE = 60 * (Math.PI / 180); //Field Of View 플레이어가 볼 수 있는 시
 const WALL_STRIP_WIDTH = 1; //벽 한 큐브의 컬럼 하나를 이와 같은 픽셀로 하겠다.
 const NUM_RAYS = WINDOW_WIDTH / WALL_STRIP_WIDTH; //하나의 벽(cube)을 향해 투사할 ray의 개수는 윈도우 넓이를 위 픽셀로 나눈 것이다.
 
+const MINIMAP_SCALE_FACTOR = 1.0;
+
 class Map {
   constructor() {
     this.grid = [
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
-      [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1],
-      [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
+      [1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+      [1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -38,11 +40,16 @@ class Map {
     for (var i = 0; i < MAP_NUM_ROWS; i++) {
       for (var j = 0; j < MAP_NUM_COLS; j++) {
         var tileX = j * TILE_SIZE;
-        var tileY = i * TILE_SIZE; //스크린에서는 가로가 column이라서 x,y를 반전시켜야 한다.
+        var tileY = i * TILE_SIZE;
         var tileColor = this.grid[i][j] == 1 ? "#222" : "#fff";
         stroke("#222");
         fill(tileColor);
-        rect(tileX, tileY, TILE_SIZE, TILE_SIZE);
+        rect(
+          MINIMAP_SCALE_FACTOR * tileX,
+          MINIMAP_SCALE_FACTOR * tileY,
+          MINIMAP_SCALE_FACTOR * TILE_SIZE,
+          MINIMAP_SCALE_FACTOR * TILE_SIZE
+        );
       }
     }
   }
@@ -51,13 +58,13 @@ class Map {
 class Player {
   constructor() {
     this.x = WINDOW_WIDTH / 2;
-    this.y = WINDOW_HEIGHT / 2; //최초위치를 맵의 정 가운데로
-    this.radius = 3; //플레이어 원 모양의 반지름 3픽셀
+    this.y = WINDOW_HEIGHT / 7; //최초위치를 맵의 정 가운데로
+    this.radius = 4; //플레이어 원 모양의 반지름 3픽셀
     this.turnDirection = 0; //-1 if left, +1 if right
     this.walkDirection = 0; //-1 if back, +1 if front
     this.rotationAngle = Math.PI / 2; //최초위치 90도
-    this.moveSpeed = 2.0;
-    this.rotationSpeed = 2 * (Math.PI / 180); //2 degree씩 움직이겠다. 1 degree = PI / 180
+    this.moveSpeed = 4.0;
+    this.rotationSpeed = 3 * (Math.PI / 180); //2 degree씩 움직이겠다. 1 degree = PI / 180
   }
 
   update() {
@@ -79,15 +86,19 @@ class Player {
 
   render() {
     noStroke();
-    fill("red");
-    circle(this.x, this.y, this.radius);
-    /*stroke("red");
-		line(
-			this.x,
-			this.y,
-			this.x + Math.cos(this.rotationAngle) * 30,
-			this.y + Math.sin(this.rotationAngle) * 30
-		);*/
+    fill("blue");
+    circle(
+      MINIMAP_SCALE_FACTOR * this.x,
+      MINIMAP_SCALE_FACTOR * this.y,
+      MINIMAP_SCALE_FACTOR * this.radius
+    );
+    stroke("blue");
+    line(
+      MINIMAP_SCALE_FACTOR * this.x,
+      MINIMAP_SCALE_FACTOR * this.y,
+      MINIMAP_SCALE_FACTOR * (this.x + Math.cos(this.rotationAngle) * 30),
+      MINIMAP_SCALE_FACTOR * (this.y + Math.sin(this.rotationAngle) * 30)
+    );
   }
 }
 
@@ -99,14 +110,14 @@ class Ray {
     this.distance = 0;
     this.wasHitVertical = false;
 
-    this.isRayFacingDown = this.rayAngle > 0 && this.rayAngle < Math.PI; //아래를 바라보고있으면 라디안 값의 범위가 이렇다.
+    this.isRayFacingDown = this.rayAngle > 0 && this.rayAngle < Math.PI;
     this.isRayFacingUp = !this.isRayFacingDown;
 
     this.isRayFacingRight =
       this.rayAngle < 0.5 * Math.PI || this.rayAngle > 1.5 * Math.PI;
     this.isRayFacingLeft = !this.isRayFacingRight;
   }
-  cast(columnId) {
+  cast() {
     var xintercept, yintercept;
     var xstep, ystep;
 
@@ -117,6 +128,7 @@ class Ray {
 
     yintercept = Math.floor(player.y / TILE_SIZE) * TILE_SIZE; //가장 가까운 y축 접점을 찾는 방법(ray가 위를 향할 때만)
     yintercept += this.isRayFacingDown ? TILE_SIZE : 0; //아래를 보고 있으면 바로 위에서 TILE_SIZE만큼 더해야 상하 반전돼서 아래 접정이 된다.
+
     xintercept = player.x + (yintercept - player.y) / Math.tan(this.rayAngle); //그 접점의 x좌표를 위에서 구한 y좌표를 활용해 삼각비로 구함
 
     ystep = TILE_SIZE; //벽을 찾을때까지 계속 더할 y값
@@ -129,9 +141,9 @@ class Ray {
     var nextHorzTouchX = xintercept;
     var nextHorzTouchY = yintercept;
 
-    if (this.isRayFacingUp) {
-      nextHorzTouchY--;
-    } //위를 향하고 있으면 그 경계가 yintercept가 되므로 --를 해줘서 한 픽셀 위로 올라가게 한다. 그러면 wall이다.
+    // if (this.isRayFacingUp) {
+    //   nextHorzTouchY--;
+    // } //위를 향하고 있으면 그 경계가 yintercept가 되므로 --를 해줘서 한 픽셀 위로 올라가게 한다. 그러면 wall이다.
 
     while (
       nextHorzTouchX >= 0 &&
@@ -139,19 +151,22 @@ class Ray {
       nextHorzTouchY >= 0 &&
       nextHorzTouchY <= WINDOW_HEIGHT
     ) {
-      if (grid.hasWallAt(nextHorzTouchX, nextHorzTouchY)) {
+      if (
+        grid.hasWallAt(
+          nextHorzTouchX,
+          nextHorzTouchY - (this.isRayFacingUp ? 1 : 0)
+        )
+      ) {
         foundHorzWallHit = true;
         horzWallHitX = nextHorzTouchX;
-        horzWallHitY = nextHorzTouchY; //HORIZONTAL로 검사했을 때 벽과 닿는 지점의 x좌표와 y좌표
-
-        stroke("red");
-        line(player.x, player.y, horzWallHitX, horzWallHitY);
-
+        horzWallHitY = nextHorzTouchY;
+        //HORIZONTAL로 검사했을 때 벽과 닿는 지점의 x좌표와 y좌표
         break;
       } else {
         nextHorzTouchX += xstep;
         nextHorzTouchY += ystep;
-      } //벽에 닿을 때까지 계속 step을 늘려주면서 찾는다.
+        //벽에 닿을 때까지 계속 step을 늘려주면서 찾는다.
+      }
     }
 
     /* VERTICAL INTERCECTION CHECK */
@@ -175,9 +190,9 @@ class Ray {
     var nextVertTouchX = xintercept;
     var nextVertTouchY = yintercept;
 
-    if (this.isRayFacingLeft) {
-      nextVertTouchX--;
-    } //ray가 왼쪽으로 가고 있을 때는 y축의 경계에 닿아있는 것이므로 벽을 확인하려면 --를 해줘서 벽 안으로 한 픽셀 더 들어가야 한다.
+    // if (this.isRayFacingLeft) {
+    //   nextVertTouchX--;
+    // } //ray가 왼쪽으로 가고 있을 때는 y축의 경계에 닿아있는 것이므로 벽을 확인하려면 --를 해줘서 벽 안으로 한 픽셀 더 들어가야 한다.
 
     while (
       nextVertTouchX >= 0 &&
@@ -185,7 +200,12 @@ class Ray {
       nextVertTouchY >= 0 &&
       nextVertTouchY <= WINDOW_HEIGHT
     ) {
-      if (grid.hasWallAt(nextVertTouchX, nextVertTouchY)) {
+      if (
+        grid.hasWallAt(
+          nextVertTouchX - (this.isRayFacingLeft ? 1 : 0),
+          nextVertTouchY
+        )
+      ) {
         foundVertWallHit = true;
         vertWallHitX = nextVertTouchX;
         vertWallHitY = nextVertTouchY;
@@ -200,24 +220,31 @@ class Ray {
     var horzHitDistance = foundHorzWallHit
       ? distanceBetweenPoints(player.x, player.y, horzWallHitX, horzWallHitY)
       : Number.MAX_VALUE;
-
     var vertHitDistance = foundVertWallHit
       ? distanceBetweenPoints(player.x, player.y, vertWallHitX, vertWallHitY)
       : Number.MAX_VALUE;
 
     //거리를 비교해서 더 짧은 거리를 저장한다.
-    this.wallHitX =
-      horzHitDistance < vertHitDistance ? horzWallHitX : vertWallHitX;
-    this.wallHitY =
-      horzHitDistance < vertHitDistance ? horzWallHitY : vertWallHitY;
-    this.distance =
-      horzHitDistance < vertHitDistance ? horzHitDistance : vertHitDistance;
-    this.wasHitVertical = vertHitDistance < horzHitDistance;
+    if (vertHitDistance < horzHitDistance) {
+      this.wallHitX = vertWallHitX;
+      this.wallHitY = vertWallHitY;
+      this.distance = vertHitDistance;
+      this.wasHitVertical = true;
+    } else {
+      this.wallHitX = horzWallHitX;
+      this.wallHitY = horzWallHitY;
+      this.distance = horzHitDistance;
+      this.wasHitVertical = false;
+    }
   }
   render() {
-    stroke("rgba(255,0,0,0.3)");
-
-    line(player.x, player.y, this.wallHitX, this.wallHitY);
+    stroke("rgba(255, 0, 0, 1.0)");
+    line(
+      MINIMAP_SCALE_FACTOR * player.x,
+      MINIMAP_SCALE_FACTOR * player.y,
+      MINIMAP_SCALE_FACTOR * this.wallHitX,
+      MINIMAP_SCALE_FACTOR * this.wallHitY
+    );
   }
 }
 
@@ -255,13 +282,41 @@ function castAllRays() {
   var rayAngle = player.rotationAngle - FOV_ANGLE / 2; //ray를 투사할 가장 왼 쪽부터 시작하기 위해 선언.
   rays = [];
 
-  for (var i = 0; i < NUM_RAYS; i++) {
+  for (var col = 0; col < NUM_RAYS; col++) {
     var ray = new Ray(rayAngle);
-    ray.cast(columnId);
-
+    ray.cast();
     rays.push(ray);
+
     rayAngle += FOV_ANGLE / NUM_RAYS; //각 ray 사이의 거리만큼 더하면서 ray를 왼쪽에서 오른쪽으로 투사한다.
-    columnId++;
+  }
+}
+
+function render3DProjectedWalls() {
+  // loop every ray in the array of rays
+  for (var i = 0; i < NUM_RAYS; i++) {
+    var ray = rays[i];
+
+    //fishbowl 왜곡효과를 잡기 위해 정확한 거리로 다시 구한다.
+    var correctWallDistance =
+      ray.distance * Math.cos(ray.rayAngle - player.rotationAngle);
+
+    //플레이어와 projection plane사이의 거리를 구함.
+    var distanceProjectionPlane = WINDOW_WIDTH / 2 / Math.tan(FOV_ANGLE / 2);
+
+    //화면에 보여질 벽의 높이(실제 벽의 높이가 아님)
+    var wallStripHeight =
+      (TILE_SIZE / correctWallDistance) * distanceProjectionPlane;
+
+    var alpha = 1.0;
+    var color = ray.wasHitVertical ? 255 : 180;
+    fill("rgba(" + color + "," + color + "," + color + "," + alpha + ")");
+    noStroke();
+    rect(
+      i * WALL_STRIP_WIDTH,
+      WINDOW_HEIGHT / 2 - wallStripHeight / 2,
+      WALL_STRIP_WIDTH,
+      wallStripHeight
+    );
   }
 }
 
@@ -288,7 +343,10 @@ function update() {
 }
 
 function draw() {
+  clear("#111");
   update();
+
+  render3DProjectedWalls();
 
   grid.render();
   for (ray of rays) {
